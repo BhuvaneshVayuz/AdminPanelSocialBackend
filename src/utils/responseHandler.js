@@ -21,4 +21,10 @@ const sendErrorResponse = ({
   });
 };
 
-export { sendResponse, sendErrorResponse };
+const createError = (statusCode, message) => {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+};
+
+export { sendResponse, sendErrorResponse, createError };
