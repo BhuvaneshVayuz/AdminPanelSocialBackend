@@ -1,13 +1,13 @@
-const User = require("../models/user.model");
+import User from "../models/user.model.js";
 
-exports.findAll = () => {
+export const findAll = () => {
   return User.find();
 };
 
-exports.create = (data) => {
+export const create = (data) => {
   return new User(data).save();
 };
 
-exports.findByEmail = async (email) => {
+export const findByEmail = async (email) => {
   return await User.findOne({ email });
 };

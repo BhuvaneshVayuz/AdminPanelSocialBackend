@@ -1,5 +1,3 @@
-// responseHandler.js
-
 const sendResponse = ({ res, statusCode, message, data = null }) => {
   return res.status(statusCode).json({
     status_code: statusCode,
@@ -23,7 +21,4 @@ const sendErrorResponse = ({
   });
 };
 
-module.exports = {
-  sendResponse,
-  sendErrorResponse,
-};
+export { sendResponse, sendErrorResponse };
