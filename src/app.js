@@ -1,7 +1,8 @@
-const express = require("express");
-const cors = require("cors");
-const userRoutes = require("./routes/user.routes");
-const errorMiddleware = require("./middlewares/error.middleware");
+import express from "express";
+import cors from "cors";
+import userRoutes from "./routes/user.routes.js";
+import errorMiddleware from "./middlewares/error.middleware.js";
+
 
 const app = express();
 
@@ -10,6 +11,6 @@ app.use(express.json());
 
 app.use("/api/users", userRoutes);
 
-app.use(errorMiddleware); // Error handler
+app.use(errorMiddleware);
 
-module.exports = app;
+export default app;

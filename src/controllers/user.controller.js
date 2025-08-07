@@ -1,20 +1,18 @@
-const { error } = require("console");
-const userService = require("../services/user.service");
-const { sendResponse, sendErrorResponse } = require("../utils/responseHandler");
+import { error } from "console";
+import * as userService from "../services/user.service.js";
+import { sendResponse, sendErrorResponse } from "../utils/responseHandler.js";
 
-exports.getAllUsers = async (req, res, next) => {
+export const getAllUsers = async (req, res, next) => {
   try {
     const users = await userService.getUsers();
 
     sendResponse({
       res,
       statusCode: 200,
-      message: "user fetch successfully ",
+      message: "User fetched successfully",
       data: users,
     });
-    // res.status(200).json({ data: users, message: "User fetched successfully" });
   } catch (err) {
-    // next(err);
     sendErrorResponse({
       res,
       statusCode: 400,
@@ -24,7 +22,7 @@ exports.getAllUsers = async (req, res, next) => {
   }
 };
 
-exports.createUser = async (req, res) => {
+export const createUser = async (req, res) => {
   try {
     const { name, email, age } = req.body;
 
@@ -37,6 +35,7 @@ exports.createUser = async (req, res) => {
     if (!emailRegex.test(email)) {
       return res.status(400).json({ message: "Invalid email format" });
     }
+
     const data = {
       name,
       email,
@@ -46,7 +45,7 @@ exports.createUser = async (req, res) => {
     sendResponse({
       res,
       statusCode: 201,
-      message: "user created successfully ",
+      message: "User created successfully",
       data: createdUser,
     });
   } catch (err) {
@@ -57,6 +56,5 @@ exports.createUser = async (req, res) => {
       message: err?.message,
       error: err,
     });
-    // next(err);
   }
 };

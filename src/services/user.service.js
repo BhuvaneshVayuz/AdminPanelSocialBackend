@@ -1,11 +1,11 @@
-const { error } = require("console");
-const userRepo = require("../repositories/user.repository");
+import { error } from "console";
+import * as userRepo from "../repositories/user.repository.js";
 
-exports.getUsers = () => {
+export const getUsers = () => {
   return userRepo.findAll();
 };
 
-exports.createUser = (data) => {
+export const createUser = (data) => {
   const { email } = data;
   const existingUser = userRepo.findByEmail(email);
   if (existingUser) {
