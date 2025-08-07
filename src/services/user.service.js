@@ -5,9 +5,10 @@ exports.getUsers = () => {
   return userRepo.findAll();
 };
 
-exports.createUser = (data) => {
+exports.createUser = async (data) => {
   const { email } = data;
-  const existingUser = userRepo.findByEmail(email);
+  const existingUser = await userRepo.findByEmail(email);
+  console.log(existingUser);
   if (existingUser) {
     throw new Error("Email already exist");
   }
