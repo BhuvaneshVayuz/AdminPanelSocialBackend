@@ -5,7 +5,8 @@ import projectRoutes from "./routes/projectRoutes.js";
 import sbuRoutes from "./routes/sbuRoutes.js";
 import errorMiddleware from "./middlewares/error.middleware.js";
 import teamRoutes from "./routes/teamRoutes.js";
-
+import sprintRoutes from "./routes/sprintRoutes.js";
+import childSprintRoutes from "./routes/childSprintRoutes.js";
 
 const app = express();
 
@@ -15,6 +16,8 @@ app.use(express.json());
 app.use("/api/users", userRoutes);
 app.use("/api/projects", projectRoutes);
 
+app.use("/api/child-sprints", childSprintRoutes);
+app.use("/api/sprints", sprintRoutes);
 app.use("/api/teams", teamRoutes);
 app.use("/api/sbu", sbuRoutes);
 
