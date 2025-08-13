@@ -50,19 +50,22 @@ export const getSBUById = async (req, res) => {
 
 export const createSBU = async (req, res) => {
     try {
-        const { name, userIds } = req.body;
+        const { name, sbuLeadId, description, websiteUrl, organizationId } = req.body;
 
-        if (!name) {
+        if (!name || !organizationId) {
             return sendErrorResponse({
                 res,
                 statusCode: 400,
-                message: 'Name is required',
+                message: 'Name and organizationId are required',
             });
         }
 
         const data = {
             name,
-            userIds: Array.isArray(userIds) ? userIds : [],
+            sbuLeadId,
+            description,
+            websiteUrl,
+            organizationId,
         };
 
         const createdSBU = await SBUService.createSBU(data);
@@ -86,7 +89,15 @@ export const createSBU = async (req, res) => {
 export const updateSBU = async (req, res) => {
     try {
         const { id } = req.params;
-        const data = req.body;
+        const { name, sbuLeadId, description, websiteUrl, organizationId } = req.body;
+
+        const data = {
+            ...(name && { name }),
+            ...(sbuLeadId && { sbuLeadId }),
+            ...(description && { description }),
+            ...(websiteUrl && { websiteUrl }),
+            ...(organizationId && { organizationId }),
+        };
 
         const updated = await SBUService.updateSBU(id, data);
 

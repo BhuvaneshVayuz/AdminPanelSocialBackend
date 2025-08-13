@@ -1,8 +1,17 @@
-import mongoose from 'mongoose';
+// models/sbuModel.js
+import mongoose from "mongoose";
 
-const sbuSchema = new mongoose.Schema({
-    name: { type: String, required: true },
-    userIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
-}, { timestamps: true });
+const sbuSchema = new mongoose.Schema(
+    {
+        name: { type: String, required: true },
+        sbuLeadId: { type: String }, // socialId of SBU lead
+        description: { type: String },
+        websiteUrl: { type: String },
+        organizationId: { type: mongoose.Schema.Types.ObjectId, ref: "Organization", required: true },
+    },
+    { timestamps: true }
+);
 
-export const SBU = mongoose.model('SBU', sbuSchema);
+sbuSchema.index({ organizationId: 1 });
+
+export const SBU = mongoose.model("SBU", sbuSchema);
