@@ -2,6 +2,7 @@ import { Role } from "../models/roleModel.js";
 import { UserRoleMapping } from "../models/userRoleMappingModel.js";
 import * as orgService from "../services/organizationService.js";
 import { ORGANIZATION_SIZES, ORGANIZATION_TYPES } from "../utils/index.js";
+import { sendResponse, sendErrorResponse } from "../utils/responseHandler.js";
 
 
 export const createOrganization = async (req, res) => {
@@ -9,34 +10,63 @@ export const createOrganization = async (req, res) => {
         const { ownerId, ...orgData } = req.body;
 
         if (!ownerId) {
-            return res.status(400).json({ error: "ownerId (socialId) is required" });
+            return sendErrorResponse({
+                res,
+                statusCode: 400,
+                message: "ownerId (socialId) is required",
+            });
         }
 
-        // 1️⃣ Fetch the "org_admin" role ID
         const orgAdminRole = await Role.findOne({ name: "org_admin" });
         if (!orgAdminRole) {
-            return res.status(500).json({ error: "Org Admin role not found" });
+            return sendErrorResponse({
+                res,
+                statusCode: 500,
+                message: "Org Admin role not found",
+            });
         }
 
-        // 2️⃣ Create the organization
+        // Step 1: Create Organization
         const org = await orgService.createOrganization({
             ...orgData,
             ownerId,
         });
 
-        // 3️⃣ Assign Org Admin role to owner
-        await UserRoleMapping.create({
-            userId: ownerId,
-            roleId: orgAdminRole._id,
-            entityType: "organization",
-            entityId: org._id,
-            assignedBy: req.user.socialId, // superadmin creating the org
-        });
+        // Step 2: Ensure owner exists in UserRoleMapping
+        let existingMapping = await UserRoleMapping.findOne({ userId: ownerId });
 
-        res.status(201).json(org);
+        if (!existingMapping) {
+            // Create mapping if owner not in system
+            existingMapping = await UserRoleMapping.create({
+                userId: ownerId,
+                roleId: orgAdminRole._id,
+                entityType: "organization",
+                entityId: org._id,
+                assignedBy: req.user.socialId || "system",
+            });
+        } else {
+            // Update existing mapping to be org_admin for this organization
+            existingMapping.roleId = orgAdminRole._id;
+            existingMapping.entityType = "organization";
+            existingMapping.entityId = org._id;
+            existingMapping.assignedBy = req.user.socialId || "system";
+            await existingMapping.save();
+        }
+
+        return sendResponse({
+            res,
+            statusCode: 201,
+            message: "Organization created successfully",
+            data: org,
+        });
     } catch (error) {
         console.error(error);
-        res.status(400).json({ error: error.message });
+        return sendErrorResponse({
+            res,
+            statusCode: 400,
+            message: error.message || "Failed to create organization",
+            error,
+        });
     }
 };
 
@@ -44,47 +74,135 @@ export const createOrganization = async (req, res) => {
 export const getAllOrganizations = async (req, res) => {
     try {
         const orgs = await orgService.getAllOrganizations();
-        res.json(orgs);
+        return sendResponse({
+            res,
+            statusCode: 200,
+            message: "Organizations fetched successfully",
+            data: orgs,
+        });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        return sendErrorResponse({
+            res,
+            message: error.message || "Failed to fetch organizations",
+            error,
+        });
     }
 };
 
 export const getOrganizationById = async (req, res) => {
     try {
         const org = await orgService.getOrganizationById(req.params.id);
-        if (!org) return res.status(404).json({ message: "Organization not found" });
-        res.json(org);
+        if (!org) {
+            return sendErrorResponse({
+                res,
+                statusCode: 404,
+                message: "Organization not found",
+            });
+        }
+        return sendResponse({
+            res,
+            statusCode: 200,
+            message: "Organization fetched successfully",
+            data: org,
+        });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        return sendErrorResponse({
+            res,
+            message: error.message || "Failed to fetch organization",
+            error,
+        });
     }
 };
 
 export const updateOrganization = async (req, res) => {
     try {
+
+        if (req.body.ownerId) {
+            const newOwnerId = req.body.ownerId;
+            const orgAdminRole = await Role.findOne({ name: "org_admin" });
+
+            let mapping = await UserRoleMapping.findOne({ userId: newOwnerId });
+
+            if (!mapping) {
+                mapping = await UserRoleMapping.create({
+                    userId: newOwnerId,
+                    roleId: orgAdminRole._id,
+                    entityType: "organization",
+                    entityId: req.params.id,
+                    assignedBy: req.user.socialId || "system",
+                });
+            } else {
+                mapping.roleId = orgAdminRole._id;
+                mapping.entityType = "organization";
+                mapping.entityId = req.params.id;
+                mapping.assignedBy = req.user.socialId || "system";
+                await mapping.save();
+            }
+        }
+
+
+
+        // No need for permission checks here; checkOrgAccess middleware already did it
         const org = await orgService.updateOrganization(req.params.id, req.body);
-        if (!org) return res.status(404).json({ message: "Organization not found" });
-        res.json(org);
+
+        if (!org) {
+            return sendErrorResponse({
+                res,
+                statusCode: 404,
+                message: "Organization not found",
+            });
+        }
+
+        return sendResponse({
+            res,
+            statusCode: 200,
+            message: "Organization updated successfully",
+            data: org,
+        });
     } catch (error) {
-        res.status(400).json({ error: error.message });
+        return sendErrorResponse({
+            res,
+            statusCode: 400,
+            message: error.message || "Failed to update organization",
+            error,
+        });
     }
 };
 
 export const deleteOrganization = async (req, res) => {
     try {
+        // No need for permission checks here; checkOrgAccess middleware already did it
         const org = await orgService.deleteOrganization(req.params.id);
-        if (!org) return res.status(404).json({ message: "Organization not found" });
-        res.json({ message: "Organization deleted successfully" });
+
+        if (!org) {
+            return sendErrorResponse({
+                res,
+                statusCode: 404,
+                message: "Organization not found",
+            });
+        }
+        return sendResponse({
+            res,
+            statusCode: 200,
+            message: "Organization deleted successfully",
+        });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        return sendErrorResponse({
+            res,
+            message: error.message || "Failed to delete organization",
+            error,
+        });
     }
 };
 
-
-
 export const getOrganizationOptions = (req, res) => {
-    res.json({
-        sizes: ORGANIZATION_SIZES,
-        types: ORGANIZATION_TYPES
+    return sendResponse({
+        res,
+        statusCode: 200,
+        message: "Organization options fetched successfully",
+        data: {
+            sizes: ORGANIZATION_SIZES,
+            types: ORGANIZATION_TYPES,
+        },
     });
 };

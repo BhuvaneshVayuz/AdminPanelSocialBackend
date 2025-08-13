@@ -1,4 +1,3 @@
-// routes/organizationRoutes.js
 import express from "express";
 import {
     createOrganization,
@@ -10,16 +9,14 @@ import {
 } from "../controllers/organizationController.js";
 import { authenticateUser } from "../middlewares/authMiddleware.js";
 import { checkPermission } from "../middlewares/checkPermissionMiddleware.js";
+import { checkOrgAccess } from "../middlewares/checkOrgAccess.js";
 
 const router = express.Router();
 
-
-
-
+// Public org meta data
 router.get("/options", getOrganizationOptions);
 
-
-// 🔹 Create Organization with auth + permission check
+// Create org (superadmin only)
 router.post(
     "/",
     authenticateUser,
@@ -27,10 +24,26 @@ router.post(
     createOrganization
 );
 
-// Other routes (you can later add permission checks here too)
+// List orgs
 router.get("/", authenticateUser, getAllOrganizations);
+
+// Get org by id
 router.get("/:id", authenticateUser, getOrganizationById);
-router.put("/:id", authenticateUser, updateOrganization);
-router.delete("/:id", authenticateUser, deleteOrganization);
+
+// Update org
+router.put(
+    "/:id",
+    authenticateUser,
+    checkOrgAccess("org:update"),
+    updateOrganization
+);
+
+// Delete org
+router.delete(
+    "/:id",
+    authenticateUser,
+    checkOrgAccess("org:delete"),
+    deleteOrganization
+);
 
 export default router;

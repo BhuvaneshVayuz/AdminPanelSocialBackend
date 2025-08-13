@@ -23,10 +23,6 @@ export const login = async (req, res) => {
             requestfrom: "social"
         });
 
-        console.log(data, 'hmmm');
-
-
-
 
         // Check if credentials are valid
         if (data.code < 200 || data.code >= 300) {

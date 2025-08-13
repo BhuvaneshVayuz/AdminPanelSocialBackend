@@ -8,7 +8,7 @@ const userRoleMappingSchema = new mongoose.Schema(
         roleId: { type: mongoose.Schema.Types.ObjectId, ref: "Role", required: true },
         entityType: { type: String, enum: ["organization", "sbu", "team"], default: null },
         entityId: { type: mongoose.Schema.Types.ObjectId, default: null },
-        assignedBy: { type: String, required: true }, // who assigned the role
+        assignedBy: { type: String }, // who assigned the role
     },
     { timestamps: true }
 );
