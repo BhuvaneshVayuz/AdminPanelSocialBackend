@@ -2,6 +2,7 @@
 import axios from "axios";
 import jwt from "jsonwebtoken";
 import { UserRoleMapping } from "../models/userRoleMappingModel.js"; // adjust path/model name
+import { sendErrorResponse, sendResponse } from "../utils/responseHandler.js";
 
 const PROFILE_BACKEND_URL = "https://profilebackend.vayuz.com/users/api/signin";
 const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey";
@@ -12,7 +13,11 @@ export const login = async (req, res) => {
         const { socialId, authenticationCode } = req.body;
 
         if (!socialId || !authenticationCode) {
-            return res.status(400).json({ message: "socialId and authenticationCode are required" });
+            return sendErrorResponse({
+                res,
+                statusCode: 400,
+                message: "socialId and authenticationCode are required",
+            });
         }
 
         // Step 1: Validate credentials with Profile Backend
@@ -24,7 +29,11 @@ export const login = async (req, res) => {
         });
 
         if (data.code < 200 || data.code >= 300) {
-            return res.status(401).json({ message: "Invalid credentials" });
+            return sendErrorResponse({
+                res,
+                statusCode: 401,
+                message: "Invalid credentials",
+            });
         }
 
 
@@ -34,15 +43,23 @@ export const login = async (req, res) => {
         const token = jwt.sign({ socialId }, JWT_SECRET, { expiresIn: JWT_EXPIRY });
 
         // Step 5: Send response
-        res.json({
+
+        return sendResponse({
+            res,
+            statusCode: 200,
             message: "Login successful",
-            token,
-            name: data?.name,
-            role: roleMapping?.[0]?.roleId?.name
+            data: {
+                token,
+                name: data?.name,
+                role: roleMapping?.[0]?.roleId?.name
+            },
         });
 
-    } catch (err) {
-        console.error(err.message);
-        res.status(500).json({ message: "Server error" });
+    } catch (error) {
+        return sendErrorResponse({
+            res,
+            message: error.message || "Server error",
+            error,
+        });
     }
 };
