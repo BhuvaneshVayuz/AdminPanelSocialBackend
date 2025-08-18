@@ -3,6 +3,7 @@ import { sendErrorResponse, sendResponse } from "../utils/responseHandler.js";
 import * as userService from "../services/userService.js";
 import * as rbacService from "../services/rbacService.js";
 import * as orgService from "../services/organizationService.js";
+import { ORGANIZATION_SIZES, ORGANIZATION_TYPES } from "../utils/index.js";
 
 /* ------------------ CREATE ORG ------------------ */
 export const createOrganization = async (req, res) => {
@@ -136,4 +137,18 @@ export const deleteOrganization = async (req, res) => {
     } catch (err) {
         return sendErrorResponse({ res, statusCode: 500, message: err.message });
     }
+};
+
+
+
+export const getOrganizationOptions = (req, res) => {
+    return sendResponse({
+        res,
+        statusCode: 200,
+        message: "Organization options fetched successfully",
+        data: {
+            sizes: ORGANIZATION_SIZES,
+            types: ORGANIZATION_TYPES,
+        },
+    });
 };

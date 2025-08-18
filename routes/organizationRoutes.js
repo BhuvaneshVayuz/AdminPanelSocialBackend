@@ -14,6 +14,8 @@ router.post(
     orgController.createOrganization
 );
 
+router.get("/options", orgController.getOrganizationOptions);
+
 // READ all organizations (superadmin only, or org_admin sees their orgs)
 router.get(
     "/",
@@ -46,5 +48,7 @@ router.delete(
     orgController.deleteOrganization
 );
 
-// router.get("/options", getOrganizationOptions);
+
+
+
 export default router;
