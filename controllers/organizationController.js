@@ -4,6 +4,8 @@ import * as userService from "../services/userService.js";
 import * as rbacService from "../services/rbacService.js";
 import * as orgService from "../services/organizationService.js";
 import { ORGANIZATION_SIZES, ORGANIZATION_TYPES } from "../utils/index.js";
+import { deleteSBU, getSBUsByOrg } from "../services/sbuService.js";
+import { deleteTeam, getTeamsBySbu } from "../services/teamService.js";
 
 /* ------------------ CREATE ORG ------------------ */
 export const createOrganization = async (req, res) => {
@@ -126,19 +128,51 @@ export const updateOrganization = async (req, res) => {
 export const deleteOrganization = async (req, res) => {
     try {
         const { orgId } = req.params;
-        const org = await orgService.deleteOrganization(orgId);
+
+        // Check if org exists
+        const org = await orgService.getOrganizationById(orgId);
+        if (!org) {
+            return sendErrorResponse({ res, statusCode: 404, message: "Organization not found" });
+        }
+
+        // 1. Get all SBUs under this org
+        const sbus = await getSBUsByOrg(orgId);
+
+        for (const sbu of sbus) {
+            // Get all teams under this SBU
+            const teams = await getTeamsBySbu(sbu._id);
+
+            // Delete all teams
+            for (const team of teams) {
+                await deleteTeam(team._id);
+
+                // Remove all team-level roles
+                await userService.removeRolesByFilter({ teamId: team._id });
+            }
+
+            // Delete the SBU
+            await deleteSBU(sbu._id);
+
+            // Remove all SBU-level roles
+            await userService.removeRolesByFilter({ sbuId: sbu._id });
+        }
+
+        // 2. Remove all org-level roles
+        await userService.removeRolesByFilter({ orgId });
+
+        // 3. Finally delete the organization
+        const deletedOrg = await orgService.deleteOrganization(orgId);
 
         return sendResponse({
             res,
             statusCode: 200,
-            message: "Organization deleted",
-            data: org,
+            message: "Organization and all its related data deleted",
+            data: deletedOrg,
         });
     } catch (err) {
         return sendErrorResponse({ res, statusCode: 500, message: err.message });
     }
 };
-
 
 
 export const getOrganizationOptions = (req, res) => {

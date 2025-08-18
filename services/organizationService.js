@@ -18,7 +18,6 @@ export const getAllOrganizations = async () => {
 };
 
 export const getOrganizationsByUser = async (user) => {
-    console.log(user, 'userrr');
 
 
     if (!user || !user.id) {

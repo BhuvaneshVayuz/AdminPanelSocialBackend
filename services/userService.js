@@ -63,3 +63,31 @@ export const upsertUserBySocialId = async ({ socialId, name, email, department }
 
     return user;
 };
+
+
+
+export const removeRolesByFilter = async (filter) => {
+    // Build query to match roles inside the roles array
+    const query = {};
+    if (filter.orgId) query["roles.orgId"] = filter.orgId;
+    if (filter.sbuId) query["roles.sbuId"] = filter.sbuId;
+    if (filter.teamId) query["roles.teamId"] = filter.teamId;
+
+    // Find all users that have roles matching the filter
+    const users = await User.find(query);
+
+    for (const user of users) {
+        // Keep only roles that DO NOT match the filter
+        user.roles = user.roles.filter((role) => {
+            if (filter.orgId && role.orgId?.toString() !== filter.orgId.toString()) return true;
+            if (filter.sbuId && role.sbuId?.toString() !== filter.sbuId.toString()) return true;
+            if (filter.teamId && role.teamId?.toString() !== filter.teamId.toString()) return true;
+
+            // if role matches filter, drop it
+            return false;
+        });
+        await user.save();
+    }
+
+    return { modifiedCount: users.length };
+};
