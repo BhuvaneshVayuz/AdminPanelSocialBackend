@@ -22,7 +22,7 @@ router.get(
 );
 
 router.get(
-    "/org/:orgId",
+    "/",
     authMiddleware,
     checkPermission("sbu:view"),
     sbuController.getSBUsByOrg

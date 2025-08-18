@@ -1,6 +1,5 @@
 // services/sbuService.js
-import * as sbuRepo from "../repositories/sbuRepository.js";
-
+import { SBURepository } from '../repositories/sbuRepository.js';
 export const createSBU = async (data) => {
     if (!data.name) {
         throw new Error("SBU name is required");
@@ -9,15 +8,15 @@ export const createSBU = async (data) => {
         throw new Error("organizationId is required");
     }
 
-    return await sbuRepo.create(data);
+    return await SBURepository.create(data);
 };
 
 export const getAllSBUs = async (filter = {}) => {
-    return await sbuRepo.findAll(filter);
+    return await SBURepository.findAll(filter);
 };
 
 export const getSBUById = async (id) => {
-    const sbu = await sbuRepo.findById(id);
+    const sbu = await SBURepository.findById(id);
     if (!sbu) {
         throw new Error("SBU not found");
     }
@@ -25,7 +24,7 @@ export const getSBUById = async (id) => {
 };
 
 export const updateSBU = async (id, data) => {
-    const updated = await sbuRepo.updateById(id, data);
+    const updated = await SBURepository.updateById(id, data);
     if (!updated) {
         throw new Error("SBU update failed or not found");
     }
@@ -33,7 +32,7 @@ export const updateSBU = async (id, data) => {
 };
 
 export const deleteSBU = async (id) => {
-    const deleted = await sbuRepo.deleteById(id);
+    const deleted = await SBURepository.deleteById(id);
     if (!deleted) {
         throw new Error("SBU deletion failed or not found");
     }
@@ -44,5 +43,5 @@ export const getSBUsByOrg = async (orgId) => {
     if (!orgId) {
         throw new Error("Organization ID is required");
     }
-    return await sbuRepo.findByOrganization(orgId);
+    return await SBURepository.findByOrganization(orgId);
 };

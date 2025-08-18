@@ -81,6 +81,10 @@ const checkPermission = (action) => {
                 allowedRoles = matchingRoles;
             } else {
                 const uniqueOrgs = [...new Set(allowedRoles.map(r => r.orgId).filter(Boolean))];
+
+
+
+
                 if (uniqueOrgs.length === 1) {
                     context.orgId = uniqueOrgs[0];
                 } else if (uniqueOrgs.length > 1) {
@@ -97,7 +101,9 @@ const checkPermission = (action) => {
                 const sbu = await getSBUById(sbuId);
                 if (!sbu) return sendErrorResponse({ res, statusCode: 404, message: "SBU not found." });
 
-                if (context.orgId && String(sbu.orgId) !== String(context.orgId)) {
+
+
+                if (context.orgId && String(sbu.organizationId) !== String(context.orgId)) {
                     return sendErrorResponse({ res, statusCode: 403, message: "SBU does not belong to organization." });
                 }
 
@@ -149,7 +155,6 @@ const checkPermission = (action) => {
             }
 
             req.context = context;
-
 
 
 
