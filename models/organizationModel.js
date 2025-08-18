@@ -19,7 +19,7 @@ const organizationSchema = new mongoose.Schema(
         description: { type: String },
         logo: { type: String },
         status: { type: String, enum: ["Active", "Inactive"], default: "Active" },
-        ownerId: { type: String, required: true },
+        adminId: { type: String, required: true },
     },
     { timestamps: true }
 );

@@ -10,3 +10,12 @@ export const updateOrganization = (id, data) =>
     Organization.findByIdAndUpdate(id, data, { new: true });
 
 export const deleteOrganization = (id) => Organization.findByIdAndDelete(id);
+
+
+
+export const getOrganizationsByUser = (userId) => {
+
+
+
+    return Organization.find({ adminId: userId });
+};

@@ -1,150 +1,191 @@
-import {
-    createTeamService,
-    getTeamsService,
-    getTeamByIdService,
-    updateTeamService,
-    deleteTeamService,
-} from "../services/teamService.js";
+// controllers/teamController.js
+import { sendErrorResponse, sendResponse } from "../utils/responseHandler.js";
+import * as userService from "../services/userService.js";
+import * as rbacService from "../services/rbacService.js";
+import * as teamService from "../services/teamService.js";
 
-import { sendResponse, sendErrorResponse } from "../utils/responseHandler.js";
-
-export const createTeamController = async (req, res) => {
+/* ------------------ CREATE TEAM ------------------ */
+export const createTeam = async (req, res) => {
     try {
-        const { name, sbuId, members } = req.body;
+        const { name, organizationId, sbuId, teamLeadId, members } = req.body;
 
-        if (!name || !sbuId) {
-            return sendErrorResponse({
-                res,
-                statusCode: 400,
-                message: 'Team name and SBU ID are required',
-            });
-        }
-
-        const data = {
+        const team = await teamService.createTeam({
             name,
+            organizationId,
             sbuId,
-            members: Array.isArray(members) ? members : [],
-        };
-
-        const team = await createTeamService(data);
-
-        sendResponse({
-            res,
-            statusCode: 201,
-            message: 'Team created successfully',
-            data: team,
+            teamLeadId: teamLeadId || null,
+            members: members || [],
         });
-    } catch (err) {
-        sendErrorResponse({
-            res,
-            statusCode: 400,
-            message: err?.message || 'Failed to create team',
-            error: err,
-        });
-    }
-};
 
-export const getTeamsController = async (req, res) => {
-    try {
-        const teams = await getTeamsService();
+        // ✅ Assign roles (via RBAC service)
+        if (teamLeadId) {
+            const lead = await userService.findUserBySocialId(teamLeadId);
+            if (!lead) {
+                return sendErrorResponse({ res, statusCode: 404, message: "Team lead not found" });
+            }
 
-        sendResponse({
-            res,
-            statusCode: 200,
-            message: 'Teams fetched successfully',
-            data: teams,
-        });
-    } catch (err) {
-        sendErrorResponse({
-            res,
-            statusCode: 400,
-            message: err?.message || 'Failed to fetch teams',
-            error: err,
-        });
-    }
-};
-
-export const getTeamByIdController = async (req, res) => {
-    try {
-        const team = await getTeamByIdService(req.params.id);
-
-        if (!team) {
-            return sendErrorResponse({
-                res,
-                statusCode: 404,
-                message: 'Team not found',
+            await rbacService.assignRole({
+                userId: lead._id,
+                roleName: "team_lead",
+                orgId: organizationId,
+                sbuId,
+                teamId: team._id,
             });
         }
 
-        sendResponse({
-            res,
-            statusCode: 200,
-            message: 'Team fetched successfully',
-            data: team,
-        });
+        if (members?.length) {
+            for (const socialId of members) {
+                const member = await userService.findUserBySocialId(socialId);
+                if (member) {
+                    await rbacService.assignRole({
+                        userId: member._id,
+                        roleName: "member",
+                        orgId: organizationId,
+                        sbuId,
+                        teamId: team._id,
+                    });
+                }
+            }
+        }
+
+        return sendResponse({ res, statusCode: 201, message: "Team created", data: team });
     } catch (err) {
-        sendErrorResponse({
-            res,
-            statusCode: 400,
-            message: err?.message || 'Failed to fetch team',
-            error: err,
-        });
+        return sendErrorResponse({ res, statusCode: 500, message: err.message });
     }
 };
 
-export const updateTeamController = async (req, res) => {
+/* ------------------ GET TEAM ------------------ */
+export const getTeam = async (req, res) => {
     try {
-        const { id } = req.params;
-        const updated = await updateTeamService(id, req.body);
+        const { teamId } = req.params;
+        const team = await teamService.getTeamById(teamId);
 
-        if (!updated) {
-            return sendErrorResponse({
-                res,
-                statusCode: 404,
-                message: 'Team not found',
-            });
-        }
-
-        sendResponse({
-            res,
-            statusCode: 200,
-            message: 'Team updated successfully',
-            data: updated,
-        });
+        return sendResponse({ res, statusCode: 200, data: team });
     } catch (err) {
-        sendErrorResponse({
-            res,
-            statusCode: 400,
-            message: err?.message || 'Failed to update team',
-            error: err,
-        });
+        return sendErrorResponse({ res, statusCode: 500, message: err.message });
     }
 };
 
-export const deleteTeamController = async (req, res) => {
+/* ------------------ UPDATE TEAM ------------------ */
+export const updateTeam = async (req, res) => {
     try {
-        const { id } = req.params;
-        const deleted = await deleteTeamService(id);
+        const { teamId } = req.params;
+        const { name, teamLeadId, members } = req.body;
 
-        if (!deleted) {
-            return sendErrorResponse({
-                res,
-                statusCode: 404,
-                message: 'Team not found',
+        const team = await teamService.getTeamById(teamId);
+
+        if (name) team.name = name;
+
+        // ✅ Handle teamLead changes
+        if (teamLeadId && teamLeadId !== team.teamLeadId) {
+            // Remove old lead role
+            if (team.teamLeadId) {
+                const oldLead = await userService.findUserBySocialId(team.teamLeadId);
+                if (oldLead) {
+                    await rbacService.removeRole({
+                        userId: oldLead._id,
+                        roleName: "team_lead",
+                        teamId,
+                    });
+                }
+            }
+
+            // Assign new lead
+            const newLead = await userService.findUserBySocialId(teamLeadId);
+            if (!newLead) {
+                return sendErrorResponse({ res, statusCode: 404, message: "New team lead not found" });
+            }
+
+            await rbacService.assignRole({
+                userId: newLead._id,
+                roleName: "team_lead",
+                orgId: team.organizationId,
+                sbuId: team.sbuId,
+                teamId,
             });
+
+            team.teamLeadId = teamLeadId;
         }
 
-        sendResponse({
-            res,
-            statusCode: 200,
-            message: 'Team deleted successfully',
-        });
+        // ✅ Handle members update
+        if (members) {
+            // Remove roles from old members not in new list
+            for (const oldMember of team.members) {
+                if (!members.includes(oldMember)) {
+                    const user = await userService.findUserBySocialId(oldMember);
+                    if (user) {
+                        await rbacService.removeRole({
+                            userId: user._id,
+                            roleName: "member",
+                            teamId,
+                        });
+                    }
+                }
+            }
+
+            // Add roles for new members
+            for (const newMember of members) {
+                if (!team.members.includes(newMember)) {
+                    const user = await userService.findUserBySocialId(newMember);
+                    if (user) {
+                        await rbacService.assignRole({
+                            userId: user._id,
+                            roleName: "member",
+                            orgId: team.organizationId,
+                            sbuId: team.sbuId,
+                            teamId,
+                        });
+                    }
+                }
+            }
+
+            team.members = members;
+        }
+
+        const updatedTeam = await teamService.updateTeam(teamId, team);
+
+        return sendResponse({ res, statusCode: 200, message: "Team updated", data: updatedTeam });
     } catch (err) {
-        sendErrorResponse({
-            res,
-            statusCode: 400,
-            message: err?.message || 'Failed to delete team',
-            error: err,
-        });
+        return sendErrorResponse({ res, statusCode: 500, message: err.message });
+    }
+};
+
+/* ------------------ DELETE TEAM ------------------ */
+export const deleteTeam = async (req, res) => {
+    try {
+        const { teamId } = req.params;
+        const team = await teamService.getTeamById(teamId);
+
+        // ✅ Cleanup roles
+        if (team.teamLeadId) {
+            const lead = await userService.findUserBySocialId(team.teamLeadId);
+            if (lead) {
+                await rbacService.removeRole({ userId: lead._id, roleName: "team_lead", teamId });
+            }
+        }
+
+        for (const memberId of team.members) {
+            const user = await userService.findUserBySocialId(memberId);
+            if (user) {
+                await rbacService.removeRole({ userId: user._id, roleName: "member", teamId });
+            }
+        }
+
+        await teamService.deleteTeam(teamId);
+
+        return sendResponse({ res, statusCode: 200, message: "Team deleted", data: team });
+    } catch (err) {
+        return sendErrorResponse({ res, statusCode: 500, message: err.message });
+    }
+};
+
+/* ------------------ LIST TEAMS IN SBU ------------------ */
+export const listTeams = async (req, res) => {
+    try {
+        const { sbuId } = req.params;
+        const teams = await teamService.getTeamsBySbu(sbuId);
+        return sendResponse({ res, statusCode: 200, data: teams });
+    } catch (err) {
+        return sendErrorResponse({ res, statusCode: 500, message: err.message });
     }
 };

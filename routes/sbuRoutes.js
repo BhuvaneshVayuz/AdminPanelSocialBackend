@@ -1,25 +1,45 @@
 // routes/sbuRoutes.js
 import express from "express";
-import {
-    getAllSBUs,
-    getSBUById,
-    createSBU,
-    updateSBU,
-    deleteSBU,
-} from "../controllers/sbuController.js";
-import { authenticateUser } from "../middlewares/authMiddleware.js";
-import { checkSBUOwnership } from "../middlewares/checkSbuAccessMiddleware.js";
+import { authMiddleware } from "../middlewares/authMiddleware.js";
+import * as sbuController from "../controllers/sbuController.js";
+import { checkPermission } from "../middlewares/checkPermissionMiddleware.js";
 
 const router = express.Router();
 
-// Authenticate all routes
-router.use(authenticateUser);
-
 // CRUD routes
-router.post("/", createSBU);
-router.get("/", getAllSBUs);
-router.get("/:id", getSBUById);
-router.put("/:id", checkSBUOwnership, updateSBU);
-router.delete("/:id", checkSBUOwnership, deleteSBU);
+router.post(
+    "/",
+    authMiddleware,
+    checkPermission("sbu:create"),
+    sbuController.createSBU
+);
+
+router.get(
+    "/:sbuId",
+    authMiddleware,
+    checkPermission("sbu:view"),
+    sbuController.getSBU
+);
+
+router.get(
+    "/org/:orgId",
+    authMiddleware,
+    checkPermission("sbu:view"),
+    sbuController.getSBUsByOrg
+);
+
+router.put(
+    "/:sbuId",
+    authMiddleware,
+    checkPermission("sbu:update"),
+    sbuController.updateSBU
+);
+
+router.delete(
+    "/:sbuId",
+    authMiddleware,
+    checkPermission("sbu:delete"),
+    sbuController.deleteSBU
+);
 
 export default router;

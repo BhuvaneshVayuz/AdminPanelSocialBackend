@@ -1,67 +1,54 @@
-// middlewares/authMiddleware.js
 import jwt from "jsonwebtoken";
-import { UserRoleMapping } from "../models/userRoleMappingModel.js";
 import { sendErrorResponse } from "../utils/responseHandler.js";
+import { getUserById } from "../services/userService.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey";
 
-export const authenticateUser = async (req, res, next) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        return sendErrorResponse({
-            res,
-            statusCode: 401,
-            message: "No token provided",
-        });
-    }
-
-    const token = authHeader.split(" ")[1];
-
+export const authMiddleware = async (req, res, next) => {
     try {
-        const decoded = jwt.verify(token, JWT_SECRET); // decoded: { socialId }
-        const socialId = decoded.socialId;
-        if (!socialId) {
+        const authHeader = req.headers.authorization;
+
+        if (!authHeader || !authHeader.startsWith("Bearer ")) {
             return sendErrorResponse({
                 res,
                 statusCode: 401,
-                message: "Invalid token payload",
+                message: "Authorization token missing or malformed",
             });
         }
 
-        // Find user's role mapping
-        const mapping = await UserRoleMapping.findOne({ userId: socialId })
-            .populate("roleId");
+        const token = authHeader.split(" ")[1];
 
-        if (!mapping || !mapping.roleId) {
+        // 🔹 Verify token
+        const decoded = jwt.verify(token, JWT_SECRET);
+
+        if (!decoded || !decoded.userId) {
             return sendErrorResponse({
                 res,
-                statusCode: 403,
-                message: "No role assigned to this user",
+                statusCode: 401,
+                message: "Invalid token",
             });
         }
 
-        const roleName = mapping.roleId.name; // e.g., "superadmin", "org_admin"
-        const entityId = mapping.entityId;
-        const entityType = mapping.entityType;
-
-        // Prepare enriched req.user
-        req.user = {
-            socialId,
-            role: roleName,
-        };
-
-        if (roleName !== "superadmin" && entityType === "organization") {
-            req.user.organizationId = entityId.toString();
+        const user = await getUserById(decoded.userId);
+        if (!user) {
+            return sendErrorResponse({
+                res,
+                statusCode: 404,
+                message: "User not found",
+            });
         }
 
+        req.userId = decoded.userId;
+        req.user = user;
+
+
         next();
-    } catch (err) {
-        console.error(err);
+    } catch (error) {
         return sendErrorResponse({
             res,
             statusCode: 401,
-            message: "Invalid or expired token",
-            error: err.message,
+            message: "Unauthorized - Token invalid or expired",
+            error: error.message,
         });
     }
 };

@@ -1,116 +1,159 @@
 // controllers/sbuController.js
-import { SBUService } from "../services/sbuService.js";
-import { sendResponse, sendErrorResponse } from "../utils/responseHandler.js";
-import { UserRoleMapping } from "../models/userRoleMappingModel.js";
-import { Role } from "../models/roleModel.js";
-import mongoose from "mongoose";
+import { SBU } from "../models/sbuModel.js";
+import { assignRole, removeRole } from "../services/rbacService.js";
+import {
+    findUserBySocialId,
+} from "../services/userService.js";
+import { sendErrorResponse, sendResponse } from "../utils/responseHandler.js";
 
-const isSuperAdmin = (role) => role === "superadmin";
-const isOrgAdmin = (role) => role === "org_admin";
-
-
-export const getAllSBUs = async (req, res) => {
+// ✅ Create SBU
+export const createSBU = async (req, res) => {
     try {
+        const { name, description, websiteUrl, organizationId, leadSocialIds = [] } = req.body;
 
-        const filter = isSuperAdmin(req.user.role)
-            ? {}
-            : { organizationId: new mongoose.Types.ObjectId(req.user.organizationId) };
+        const sbu = await SBU.create({
+            name,
+            description,
+            websiteUrl,
+            organizationId,
+            leadSocialIds,
+        });
 
-        const sbus = await SBUService.getAllSBUs(filter);
-        sendResponse({ res, statusCode: 200, message: "SBUs fetched successfully", data: sbus });
+        // Assign roles to leads
+        for (const socialId of leadSocialIds) {
+            const user = await findUserBySocialId(socialId);
+            if (user) {
+                await assignRole({
+                    userId: user._id,
+                    roleName: "sbu_lead",
+                    orgId: organizationId,
+                    sbuId: sbu._id,
+                });
+            }
+        }
+
+        return sendResponse({
+            res,
+            message: "SBU created successfully",
+            data: sbu,
+        });
     } catch (err) {
-        sendErrorResponse({ res, statusCode: 400, message: err?.message || "Failed to fetch SBUs", error: err });
+        console.error(err);
+        return sendErrorResponse({
+            res,
+            statusCode: 500,
+            message: "Error creating SBU",
+            error: err.message,
+        });
     }
 };
 
-export const getSBUById = async (req, res) => {
+// ✅ Get Single SBU
+export const getSBU = async (req, res) => {
     try {
-
-        const sbu = await SBUService.getSBUById(req.params.id);
+        const { sbuId } = req.params;
+        const sbu = await SBU.findById(sbuId).populate("organizationId", "name");
         if (!sbu) {
             return sendErrorResponse({ res, statusCode: 404, message: "SBU not found" });
         }
-        if (isOrgAdmin(req.user.role) && sbu.organizationId.toString() !== req.user.organizationId) {
-            return sendErrorResponse({ res, statusCode: 403, message: "Not authorized to access this SBU" });
-        }
-        sendResponse({ res, statusCode: 200, message: "SBU fetched successfully", data: sbu });
+        return sendResponse({ res, data: sbu });
     } catch (err) {
-        sendErrorResponse({ res, statusCode: 400, message: err?.message || "Failed to fetch SBU", error: err });
+        return sendErrorResponse({ res, statusCode: 500, message: err.message });
     }
 };
 
-export const createSBU = async (req, res) => {
+// ✅ Get all SBUs in an org
+export const getSBUsByOrg = async (req, res) => {
     try {
-
-        let { name, sbuLeadId, description, websiteUrl, organizationId } = req.body;
-        if (!name) {
-            return sendErrorResponse({ res, statusCode: 400, message: "Name is required" });
-        }
-
-        if (isOrgAdmin(req.user.role)) {
-            organizationId = req.user.organizationId;
-        } else if (isSuperAdmin(req.user.role) && !organizationId) {
-            return sendErrorResponse({ res, statusCode: 400, message: "organizationId is required for super admin" });
-        }
-
-        const createdSBU = await SBUService.createSBU({
-            name,
-            sbuLeadId,
-            description,
-            websiteUrl,
-            organizationId: new mongoose.Types.ObjectId(organizationId),
-        });
-
-        sendResponse({ res, statusCode: 201, message: "SBU created successfully", data: createdSBU });
+        const { orgId } = req.params;
+        const sbus = await SBU.find({ organizationId: orgId });
+        return sendResponse({ res, data: sbus });
     } catch (err) {
-        sendErrorResponse({ res, statusCode: 400, message: err?.message || "Failed to create SBU", error: err });
+        return sendErrorResponse({ res, statusCode: 500, message: err.message });
     }
 };
 
+// ✅ Update SBU
 export const updateSBU = async (req, res) => {
     try {
+        const { sbuId } = req.params;
+        const { name, description, websiteUrl, leadSocialIds = [] } = req.body;
 
-        const { id } = req.params;
-        const existingSBU = await SBUService.getSBUById(id);
-        if (!existingSBU) {
-            return sendErrorResponse({ res, statusCode: 404, message: "SBU not found" });
+        const sbu = await SBU.findById(sbuId);
+        if (!sbu) return sendErrorResponse({ res, statusCode: 404, message: "SBU not found" });
+
+        // Track old leads
+        const oldLeads = sbu.leadSocialIds || [];
+
+        // Update fields
+        sbu.name = name ?? sbu.name;
+        sbu.description = description ?? sbu.description;
+        sbu.websiteUrl = websiteUrl ?? sbu.websiteUrl;
+        sbu.leadSocialIds = leadSocialIds;
+
+        await sbu.save();
+
+        // Reassign roles
+        const removedLeads = oldLeads.filter(id => !leadSocialIds.includes(id));
+        const newLeads = leadSocialIds.filter(id => !oldLeads.includes(id));
+
+        // Remove roles for removed leads
+        for (const socialId of removedLeads) {
+            const user = await findUserBySocialId(socialId);
+            if (user) {
+                await removeRole({
+                    userId: user._id,
+                    roleName: "sbu_lead",
+                    sbuId: sbu._id,
+                });
+            }
         }
-        if (isOrgAdmin(req.user.role) && existingSBU.organizationId.toString() !== req.user.organizationId) {
-            return sendErrorResponse({ res, statusCode: 403, message: "Not authorized to update this SBU" });
+
+        // Add roles for new leads
+        for (const socialId of newLeads) {
+            const user = await findUserBySocialId(socialId);
+            if (user) {
+                await assignRole({
+                    userId: user._id,
+                    roleName: "sbu_lead",
+                    orgId: sbu.organizationId,
+                    sbuId: sbu._id,
+                });
+            }
         }
 
-        const { name, sbuLeadId, description, websiteUrl, organizationId } = req.body;
-
-        const updated = await SBUService.updateSBU(id, {
-            ...(name && { name }),
-            ...(sbuLeadId && { sbuLeadId }),
-            ...(description && { description }),
-            ...(websiteUrl && { websiteUrl }),
-            ...(isSuperAdmin(req.user.role) && organizationId && { organizationId }), // No casting needed
+        return sendResponse({
+            res,
+            message: "SBU updated successfully",
+            data: sbu,
         });
-
-        sendResponse({ res, statusCode: 200, message: "SBU updated successfully", data: updated });
     } catch (err) {
-        sendErrorResponse({ res, statusCode: 400, message: err?.message || "Failed to update SBU", error: err });
+        return sendErrorResponse({ res, statusCode: 500, message: err.message });
     }
 };
 
+// ✅ Delete SBU
 export const deleteSBU = async (req, res) => {
     try {
-        await enrichUserWithRole(req);
+        const { sbuId } = req.params;
 
-        const { id } = req.params;
-        const existingSBU = await SBUService.getSBUById(id);
-        if (!existingSBU) {
-            return sendErrorResponse({ res, statusCode: 404, message: "SBU not found" });
-        }
-        if (isOrgAdmin(req.user.role) && existingSBU.organizationId.toString() !== req.user.organizationId) {
-            return sendErrorResponse({ res, statusCode: 403, message: "Not authorized to delete this SBU" });
+        const sbu = await SBU.findByIdAndDelete(sbuId);
+        if (!sbu) return sendErrorResponse({ res, statusCode: 404, message: "SBU not found" });
+
+        // Remove lead roles
+        for (const socialId of sbu.leadSocialIds) {
+            const user = await findUserBySocialId(socialId);
+            if (user) {
+                await removeRole({
+                    userId: user._id,
+                    roleName: "sbu_lead",
+                    sbuId: sbu._id,
+                });
+            }
         }
 
-        await SBUService.deleteSBU(id);
-        sendResponse({ res, statusCode: 200, message: "SBU deleted successfully" });
+        return sendResponse({ res, message: "SBU deleted successfully" });
     } catch (err) {
-        sendErrorResponse({ res, statusCode: 400, message: err?.message || "Failed to delete SBU", error: err });
+        return sendErrorResponse({ res, statusCode: 500, message: err.message });
     }
 };

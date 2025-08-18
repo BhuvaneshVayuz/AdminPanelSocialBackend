@@ -1,57 +1,36 @@
-import { Role } from "../models/roleModel.js";
-import { UserRoleMapping } from "../models/userRoleMappingModel.js";
+// controllers/organizationController.js
+import { sendErrorResponse, sendResponse } from "../utils/responseHandler.js";
+import * as userService from "../services/userService.js";
+import * as rbacService from "../services/rbacService.js";
 import * as orgService from "../services/organizationService.js";
-import { ORGANIZATION_SIZES, ORGANIZATION_TYPES } from "../utils/index.js";
-import { sendResponse, sendErrorResponse } from "../utils/responseHandler.js";
 
-
+/* ------------------ CREATE ORG ------------------ */
 export const createOrganization = async (req, res) => {
     try {
-        const { ownerId, ...orgData } = req.body;
+        const { name, adminId, ...rest } = req.body;
 
-        if (!ownerId) {
+        if (!name || !adminId) {
             return sendErrorResponse({
                 res,
                 statusCode: 400,
-                message: "ownerId (socialId) is required",
+                message: "name and adminId are required",
             });
         }
 
-        const orgAdminRole = await Role.findOne({ name: "org_admin" });
-        if (!orgAdminRole) {
-            return sendErrorResponse({
-                res,
-                statusCode: 500,
-                message: "Org Admin role not found",
-            });
+        // ✅ Create organization via service
+        const org = await orgService.createOrganization({ name, adminId, ...rest });
+
+        // ✅ Assign org_admin role to admin user
+        const user = await userService.findUserBySocialId(adminId);
+        if (!user) {
+            return sendErrorResponse({ res, statusCode: 404, message: "Admin user not found" });
         }
 
-        // Step 1: Create Organization
-        const org = await orgService.createOrganization({
-            ...orgData,
-            ownerId,
+        await rbacService.assignRole({
+            userId: user._id,
+            roleName: "org_admin",
+            orgId: org._id,
         });
-
-        // Step 2: Ensure owner exists in UserRoleMapping
-        let existingMapping = await UserRoleMapping.findOne({ userId: ownerId });
-
-        if (!existingMapping) {
-            // Create mapping if owner not in system
-            existingMapping = await UserRoleMapping.create({
-                userId: ownerId,
-                roleId: orgAdminRole._id,
-                entityType: "organization",
-                entityId: org._id,
-                assignedBy: req.user.socialId || "system",
-            });
-        } else {
-            // Update existing mapping to be org_admin for this organization
-            existingMapping.roleId = orgAdminRole._id;
-            existingMapping.entityType = "organization";
-            existingMapping.entityId = org._id;
-            existingMapping.assignedBy = req.user.socialId || "system";
-            await existingMapping.save();
-        }
 
         return sendResponse({
             res,
@@ -59,150 +38,102 @@ export const createOrganization = async (req, res) => {
             message: "Organization created successfully",
             data: org,
         });
-    } catch (error) {
-        console.error(error);
-        return sendErrorResponse({
-            res,
-            statusCode: 400,
-            message: error.message || "Failed to create organization",
-            error,
-        });
+    } catch (err) {
+        return sendErrorResponse({ res, statusCode: 500, message: err.message });
     }
 };
 
-
-export const getAllOrganizations = async (req, res) => {
+/* ------------------ LIST ORGS ------------------ */
+export const getOrganizations = async (req, res) => {
     try {
-        const orgs = await orgService.getAllOrganizations();
+        // ✅ Use logged-in user from req.user (populated by authMiddleware)
+        const user = req.user;
+
+        const orgs = await orgService.getOrganizationsByUser(user);
+
         return sendResponse({
             res,
             statusCode: 200,
-            message: "Organizations fetched successfully",
+            message:
+                user.role === "superadmin"
+                    ? "All organizations fetched"
+                    : "Organizations for admin fetched",
             data: orgs,
         });
-    } catch (error) {
+    } catch (err) {
         return sendErrorResponse({
             res,
-            message: error.message || "Failed to fetch organizations",
-            error,
+            statusCode: 500,
+            message: err.message,
         });
     }
 };
 
+/* ------------------ GET ORG BY ID ------------------ */
 export const getOrganizationById = async (req, res) => {
     try {
-        const org = await orgService.getOrganizationById(req.params.id);
-        if (!org) {
-            return sendErrorResponse({
-                res,
-                statusCode: 404,
-                message: "Organization not found",
-            });
-        }
+        const { orgId } = req.params;
+        const org = await orgService.getOrganizationById(orgId);
+
         return sendResponse({
             res,
             statusCode: 200,
-            message: "Organization fetched successfully",
+            message: "Organization fetched",
             data: org,
         });
-    } catch (error) {
-        return sendErrorResponse({
-            res,
-            message: error.message || "Failed to fetch organization",
-            error,
-        });
+    } catch (err) {
+        return sendErrorResponse({ res, statusCode: 500, message: err.message });
     }
 };
 
+/* ------------------ UPDATE ORG ------------------ */
 export const updateOrganization = async (req, res) => {
     try {
+        const { orgId } = req.params;
+        const { adminId, ...updates } = req.body;
 
-        if (req.body.ownerId) {
-            const newOwnerId = req.body.ownerId;
-            const orgAdminRole = await Role.findOne({ name: "org_admin" });
+        const org = await orgService.updateOrganization(orgId, updates);
 
-            let mapping = await UserRoleMapping.findOne({ userId: newOwnerId });
-
-            if (!mapping) {
-                mapping = await UserRoleMapping.create({
-                    userId: newOwnerId,
-                    roleId: orgAdminRole._id,
-                    entityType: "organization",
-                    entityId: req.params.id,
-                    assignedBy: req.user.socialId || "system",
-                });
-            } else {
-                mapping.roleId = orgAdminRole._id;
-                mapping.entityType = "organization";
-                mapping.entityId = req.params.id;
-                mapping.assignedBy = req.user.socialId || "system";
-                await mapping.save();
+        // ✅ If adminId changes, reassign org_admin role
+        if (adminId && adminId !== org.adminId) {
+            const newAdmin = await userService.findUserBySocialId(adminId);
+            if (!newAdmin) {
+                return sendErrorResponse({ res, statusCode: 404, message: "New admin user not found" });
             }
-        }
 
-
-
-        // No need for permission checks here; checkOrgAccess middleware already did it
-        const org = await orgService.updateOrganization(req.params.id, req.body);
-
-        if (!org) {
-            return sendErrorResponse({
-                res,
-                statusCode: 404,
-                message: "Organization not found",
+            await rbacService.assignRole({
+                userId: newAdmin._id,
+                roleName: "org_admin",
+                orgId: org._id,
             });
+
+            org.adminId = adminId;
         }
 
         return sendResponse({
             res,
             statusCode: 200,
-            message: "Organization updated successfully",
+            message: "Organization updated",
             data: org,
         });
-    } catch (error) {
-        return sendErrorResponse({
-            res,
-            statusCode: 400,
-            message: error.message || "Failed to update organization",
-            error,
-        });
+    } catch (err) {
+        return sendErrorResponse({ res, statusCode: 500, message: err.message });
     }
 };
 
+/* ------------------ DELETE ORG ------------------ */
 export const deleteOrganization = async (req, res) => {
     try {
-        // No need for permission checks here; checkOrgAccess middleware already did it
-        const org = await orgService.deleteOrganization(req.params.id);
+        const { orgId } = req.params;
+        const org = await orgService.deleteOrganization(orgId);
 
-        if (!org) {
-            return sendErrorResponse({
-                res,
-                statusCode: 404,
-                message: "Organization not found",
-            });
-        }
         return sendResponse({
             res,
             statusCode: 200,
-            message: "Organization deleted successfully",
+            message: "Organization deleted",
+            data: org,
         });
-    } catch (error) {
-        return sendErrorResponse({
-            res,
-            message: error.message || "Failed to delete organization",
-            error,
-        });
+    } catch (err) {
+        return sendErrorResponse({ res, statusCode: 500, message: err.message });
     }
-};
-
-export const getOrganizationOptions = (req, res) => {
-    return sendResponse({
-        res,
-        statusCode: 200,
-        message: "Organization options fetched successfully",
-        data: {
-            sizes: ORGANIZATION_SIZES,
-            types: ORGANIZATION_TYPES,
-        },
-    });
 };
