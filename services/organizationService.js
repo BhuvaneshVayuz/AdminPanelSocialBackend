@@ -18,12 +18,15 @@ export const getAllOrganizations = async () => {
 };
 
 export const getOrganizationsByUser = async (user) => {
+    console.log(user, 'userrr');
+
+
     if (!user || !user.id) {
         throw new Error("User details are required");
     }
 
     // If superadmin → return all orgs
-    if (user.role === "superadmin") {
+    if (user?.isSuperAdmin) {
         return await orgRepo.getAllOrganizations();
     }
 

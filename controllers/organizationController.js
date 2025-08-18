@@ -55,7 +55,7 @@ export const getOrganizations = async (req, res) => {
             res,
             statusCode: 200,
             message:
-                user.role === "superadmin"
+                user.isSuperAdmin
                     ? "All organizations fetched"
                     : "Organizations for admin fetched",
             data: orgs,
