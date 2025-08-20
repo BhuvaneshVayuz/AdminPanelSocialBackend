@@ -56,3 +56,7 @@ export const getTeamsBySbu = async (sbuId) => {
     }
     return await teamRepo.getTeamsBySbu(sbuId);
 };
+
+export const getTeamsByOrg = async (orgId) => {
+    return teamRepo.findTeamsByOrg(orgId);
+};

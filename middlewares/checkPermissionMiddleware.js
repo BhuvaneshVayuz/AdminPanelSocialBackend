@@ -115,6 +115,12 @@ const checkPermission = (action) => {
                 allowedRoles = matchingRoles;
             } else {
                 const uniqueSbus = [...new Set(allowedRoles.map(r => r.sbuId).filter(Boolean))];
+
+
+
+                console.log(uniqueSbus, 'sbuu', req.user);
+
+
                 if (uniqueSbus.length === 1) {
                     context.sbuId = uniqueSbus[0];
                 } else if (uniqueSbus.length > 1) {
@@ -131,7 +137,9 @@ const checkPermission = (action) => {
                 const team = await getTeamById(teamId);
                 if (!team) return sendErrorResponse({ res, statusCode: 404, message: "Team not found." });
 
-                if (context.sbuId && String(team.sbuId) !== String(context.sbuId)) {
+                console.log(context.sbuId, team, 'dost');
+
+                if (context.sbuId && String(team.sbuId?._id) !== String(context.sbuId)) {
                     return sendErrorResponse({ res, statusCode: 403, message: "Team does not belong to SBU." });
                 }
 

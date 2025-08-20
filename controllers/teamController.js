@@ -7,7 +7,18 @@ import * as teamService from "../services/teamService.js";
 /* ------------------ CREATE TEAM ------------------ */
 export const createTeam = async (req, res) => {
     try {
-        const { name, organizationId, sbuId, teamLeadId, members } = req.body;
+        const { name, teamLeadId, members } = req.body;
+
+        // ✅ Prefer org/sbu from checkPermission middleware (req.context)
+        const organizationId = req.context?.orgId || req.body.organizationId || null;
+        const sbuId = req.context?.sbuId || req.body.sbuId || null;
+
+        if (!organizationId) {
+            return sendErrorResponse({ res, statusCode: 400, message: "OrganizationId is required." });
+        }
+        if (!sbuId) {
+            return sendErrorResponse({ res, statusCode: 400, message: "SBUId is required." });
+        }
 
         const team = await teamService.createTeam({
             name,
@@ -182,8 +193,23 @@ export const deleteTeam = async (req, res) => {
 /* ------------------ LIST TEAMS IN SBU ------------------ */
 export const listTeams = async (req, res) => {
     try {
-        const { sbuId } = req.params;
-        const teams = await teamService.getTeamsBySbu(sbuId);
+        const { orgId } = req.context; // ✅ populated by checkPermission middleware
+
+        let teams;
+
+
+
+
+        if (req?.user?.isSuperAdmin) {
+            // ✅ Superadmin gets everything
+            teams = await teamService.getAllTeams();
+        } else {
+            if (!orgId) {
+                return sendErrorResponse({ res, statusCode: 400, message: "Organization context is required." });
+            }
+            teams = await teamService.getTeamsByOrg(orgId);
+        }
+
         return sendResponse({ res, statusCode: 200, data: teams });
     } catch (err) {
         return sendErrorResponse({ res, statusCode: 500, message: err.message });

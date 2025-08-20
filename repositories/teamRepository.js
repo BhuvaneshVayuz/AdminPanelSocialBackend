@@ -17,11 +17,12 @@ export const getTeamById = (id) =>
         .populate("members");
 
 export const updateTeamById = (id, data) =>
-    Team.findByIdAndUpdate(id, data, { new: true })
+    Team.findByIdAndUpdate(id, { $set: data }, { new: true })
         .populate("organizationId")
         .populate("sbuId")
         .populate("teamLeadId")
         .populate("members");
+
 
 export const deleteTeamById = (id) => Team.findByIdAndDelete(id);
 
@@ -36,6 +37,13 @@ export const findTeamByIdAndUpdate = (id, update) =>
 // ✅ New: get teams by SBU
 export const getTeamsBySbu = (sbuId) =>
     Team.find({ sbuId })
+        .populate("organizationId")
+        .populate("sbuId")
+        .populate("teamLeadId")
+        .populate("members");
+
+export const findTeamsByOrg = (orgId) =>
+    Team.find({ organizationId: orgId })
         .populate("organizationId")
         .populate("sbuId")
         .populate("teamLeadId")

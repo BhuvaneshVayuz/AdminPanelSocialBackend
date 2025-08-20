@@ -37,7 +37,7 @@ router.delete(
 
 // === List teams by SBU ===
 router.get(
-    "/sbu/:sbuId",
+    "/",
     authMiddleware,
     checkPermission("team:view"),
     teamController.listTeams
