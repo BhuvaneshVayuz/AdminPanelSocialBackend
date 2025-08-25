@@ -9,6 +9,7 @@ import childSprintRoutes from "./routes/childSprintRoutes.js";
 import organizationRoutes from "./routes/organizationRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
+import encryptionRoutes from "./routes/encryption.js";
 
 
 
@@ -42,6 +43,7 @@ app.use("/api/sbu", sbuRoutes);
 
 app.use("/api/users", userRoutes);
 
+app.use("/api/encryption", encryptionRoutes);
 
 app.use("/api/projects", projectRoutes);
 app.use("/api/child-sprints", childSprintRoutes);
